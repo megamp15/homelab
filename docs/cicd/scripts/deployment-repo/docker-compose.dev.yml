@@ -1,0 +1,71 @@
+name: homelab-dev
+
+services:
+  frontend-dev:
+    image: ${REGISTRY}/frontend:latest
+    container_name: frontend-dev
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - app-network
+    depends_on:
+      - api-dev
+
+  api-dev:
+    image: ${REGISTRY}/api:latest
+    container_name: api-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=app_dev
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+  backend-dev:
+    image: ${REGISTRY}/backend:latest
+    container_name: backend-dev
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PYTHON_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=app_dev
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: postgres-dev
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=app_dev
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 

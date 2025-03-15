@@ -1,0 +1,71 @@
+name: homelab-staging
+
+services:
+  frontend-staging:
+    image: ${REGISTRY}/frontend:staging
+    container_name: frontend-staging
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    networks:
+      - app-network-staging
+    depends_on:
+      - api-staging
+
+  api-staging:
+    image: ${REGISTRY}/api:staging
+    container_name: api-staging
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=staging
+      - DB_HOST=postgres-staging
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=app_staging
+    networks:
+      - app-network-staging
+    depends_on:
+      - postgres-staging
+
+  backend-staging:
+    image: ${REGISTRY}/backend:staging
+    container_name: backend-staging
+    restart: unless-stopped
+    ports:
+      - "4001:4000"
+    environment:
+      - PYTHON_ENV=staging
+      - DB_HOST=postgres-staging
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=app_staging
+    networks:
+      - app-network-staging
+    depends_on:
+      - postgres-staging
+
+  postgres-staging:
+    image: postgres:14-alpine
+    container_name: postgres-staging
+    restart: unless-stopped
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=app_staging
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network-staging
+
+networks:
+  app-network-staging:
+    driver: bridge
+
+volumes:
+  postgres_data_staging: 

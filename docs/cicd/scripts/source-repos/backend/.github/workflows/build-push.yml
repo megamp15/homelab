@@ -1,0 +1,91 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - '!.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up environment variables
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENVIRONMENT="prod"
+          else
+            ENVIRONMENT="dev"
+          fi
+          
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+          echo "SERVICE_NAME=backend" >> $GITHUB_ENV
+          
+          # Set tag based on environment
+          if [[ "$ENVIRONMENT" == "prod" ]]; then
+            TAG="prod"
+          elif [[ "$ENVIRONMENT" == "staging" ]]; then
+            TAG="staging"
+          else
+            TAG="latest"
+          fi
+          
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          tags: tag:ci
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.HOMELAB_HOST }}:5000/${{ env.SERVICE_NAME }}:${{ env.TAG }} .
+
+      - name: Push Docker image to local registry
+        run: |
+          docker push ${{ secrets.HOMELAB_HOST }}:5000/${{ env.SERVICE_NAME }}:${{ env.TAG }}
+
+      - name: Trigger CICD Deployment
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.CICD_PAT }}
+          repository: myorg/cicd
+          event-type: deploy-${{ env.SERVICE_NAME }}-${{ env.ENVIRONMENT }}
+          client-payload: '{"service": "${{ env.SERVICE_NAME }}", "environment": "${{ env.ENVIRONMENT }}"}'
+
+      - name: Cleanup Tailscale
+        if: always()
+        run: |
+          sudo tailscale logout 

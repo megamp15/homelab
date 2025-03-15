@@ -1,0 +1,67 @@
+name: Deploy Service
+
+on:
+  repository_dispatch:
+    types: 
+      - deploy-frontend-dev
+      - deploy-api-dev
+      - deploy-backend-dev
+      - deploy-frontend-staging
+      - deploy-api-staging
+      - deploy-backend-staging
+      - deploy-frontend-prod
+      - deploy-api-prod
+      - deploy-backend-prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          tags: tag:ci
+
+      - name: Setup SSH
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          known_hosts: ${{ secrets.HOMELAB_SSH_KNOWN_HOSTS }}
+
+      - name: Extract environment and service
+        run: |
+          EVENT_TYPE="${{ github.event.action }}"
+          SERVICE=$(echo ${{ github.event.client_payload.service }})
+          ENVIRONMENT=$(echo ${{ github.event.client_payload.environment }})
+          echo "SERVICE=$SERVICE" >> $GITHUB_ENV
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+
+      - name: Copy files to server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'terraform/' \
+            --exclude '.gitignore' \
+            ./ ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:/opt/deployments/${{ env.ENVIRONMENT }}/cicd/
+
+      - name: Deploy to homelab
+        run: |
+          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} << 'EOF'
+            cd /opt/deployments/${{ env.ENVIRONMENT }}/cicd
+            
+            # Deploy using Docker Compose with environment variables passed directly
+            REGISTRY="${{ secrets.HOMELAB_HOST }}:5000" \
+            POSTGRES_USER="postgres" \
+            POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            docker compose -f docker-compose.${{ env.ENVIRONMENT }}.yml up -d --build ${{ env.SERVICE }}-${{ env.ENVIRONMENT }}
+          EOF
+
+      - name: Cleanup Tailscale
+        if: always()
+        run: |
+          sudo tailscale logout 

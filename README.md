@@ -39,8 +39,13 @@ A homelab is a personal laboratory at home where you can experiment with new tec
 - [Services](docs/services/README.md) - Self-hosted applications and services
   - [Docker Installation](docs/services/docker-install.md) - Setting up Docker Engine
   - [Docker Registry](docs/services/docker-registry.md) - Private container registry
+- [CI/CD Pipeline](docs/cicd/README.md) - Continuous Integration and Deployment
+  - [Basic CI/CD Pipeline](docs/cicd/cicd-pipeline.md) - Automated deployment workflow
+  - [Multi-Repository CI/CD](docs/cicd/multi-repo-cicd.md) - Advanced CI/CD with multiple repositories
+    - [Example Scripts](docs/cicd/scripts/) - Workflow and configuration examples
+    - [Source Repository Examples](docs/cicd/scripts/source-repos/) - Frontend, API, and Backend Repository structure examples
+    - [Deployment Repository Example](docs/cicd/scripts/deployment-repo/) - Central deployment repository structure configuration
 - [Maintenance](docs/maintenance/README.md) - Backup strategies and system maintenance
-  - [CI/CD Pipeline](docs/maintenance/cicd-pipeline.md) - Automated deployment workflow
 - [Troubleshooting](docs/troubleshooting/README.md) - Common issues and solutions
 
 ## Project Structure
@@ -54,8 +59,11 @@ homelab/
 │   ├── services/
 │   │   ├── docker-install.md
 │   │   └── docker-registry.md
+│   ├── cicd/
+│   │   ├── README.md
+│   │   ├── cicd-pipeline.md
+│   │   └── multi-repo-cicd.md
 │   ├── maintenance/
-│   │   └── cicd-pipeline.md
 │   └── troubleshooting/
 └── README.md
 ```
@@ -66,6 +74,9 @@ homelab/
 - **Containerization**: Docker for efficient application deployment
 - **Private Registry**: Local Docker registry for storing custom images
 - **Automated Deployments**: CI/CD pipeline for streamlined updates
+  - Multi-repository architecture for separating code and deployment concerns
+  - GitHub Actions workflows for building, pushing, and deploying services
+  - Environment-specific configurations for development, staging, and production
 - **Secure Remote Access**: VPN and tunneling for accessing services from anywhere
 - **Persistent Storage**: NAS integration for reliable data storage
 - **Backup Solutions**: Comprehensive backup strategy for data protection
