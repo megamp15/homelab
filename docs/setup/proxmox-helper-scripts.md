@@ -55,27 +55,6 @@ When you run a script, it will:
 8. Ask for network configuration
 9. Create and configure the container
 
-## Available Scripts
-
-Here are some of the most useful scripts available:
-
-### Linux Distributions
-
-- [Ubuntu 22.04](https://community-scripts.github.io/ProxmoxVE/install/ubuntu-22-04.sh)
-- [Debian 12](https://community-scripts.github.io/ProxmoxVE/install/debian-12.sh)
-- [Alpine 3.18](https://community-scripts.github.io/ProxmoxVE/install/alpine-3-18.sh)
-- [Fedora 38](https://community-scripts.github.io/ProxmoxVE/install/fedora-38.sh)
-
-### Applications
-
-- [Docker](https://community-scripts.github.io/ProxmoxVE/install/docker.sh)
-- [Nginx Proxy Manager](https://community-scripts.github.io/ProxmoxVE/install/nginx-proxy-manager.sh)
-- [Plex Media Server](https://community-scripts.github.io/ProxmoxVE/install/plex.sh)
-- [Home Assistant](https://community-scripts.github.io/ProxmoxVE/install/homeassistant.sh)
-- [Jellyfin](https://community-scripts.github.io/ProxmoxVE/install/jellyfin.sh)
-- [Nextcloud](https://community-scripts.github.io/ProxmoxVE/install/nextcloud.sh)
-- [Pihole](https://community-scripts.github.io/ProxmoxVE/install/pihole.sh)
-
 For a complete list of available scripts, visit the [Proxmox VE Helper-Scripts website](https://community-scripts.github.io/ProxmoxVE/).
 
 ## Customizing Containers After Creation
