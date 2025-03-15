@@ -1,4 +1,4 @@
-# My Homelab (2025)
+# My Homelab
 
 ![License](https://img.shields.io/github/license/megamp15/homelab)
 ![Last Commit](https://img.shields.io/github/last-commit/megamp15/homelab)
