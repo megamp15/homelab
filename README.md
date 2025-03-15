@@ -1,7 +1,7 @@
 # My Homelab (2025)
 
-![License](https://img.shields.io/github/license/yourusername/homelab)
-![Last Commit](https://img.shields.io/github/last-commit/yourusername/homelab)
+![License](https://img.shields.io/github/license/megamp15/homelab)
+![Last Commit](https://img.shields.io/github/last-commit/megamp15/homelab)
 
 > A comprehensive documentation of my homelab setup, configurations, and learnings from building a home server infrastructure in 2025.
 
