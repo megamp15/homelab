@@ -30,10 +30,12 @@ A homelab is a personal laboratory at home where you can experiment with new tec
 | [Docker](https://www.docker.com/) | Container platform |
 | [Tailscale](https://tailscale.com/) | Private mesh network & secure remote access |
 | [Cloudflare Tunnels](https://www.cloudflare.com/products/tunnel/) | Secure public-facing services without port forwarding |
+| [Proxmox Helper-Scripts](https://community-scripts.github.io/ProxmoxVE/) | Easy LXC container deployment |
 
 ## Documentation
 
 - [Setup Guide](docs/setup/README.md) - Initial installation and configuration
+  - [Proxmox Helper-Scripts](docs/setup/proxmox-helper-scripts.md) - Using community scripts to deploy LXC containers
 - [Network Configuration](docs/network/README.md) - Network setup and VPN configuration
 - [Storage Management](docs/storage/README.md) - TrueNAS setup and data management
 - [Services](docs/services/README.md) - Self-hosted applications and services
@@ -54,6 +56,8 @@ A homelab is a personal laboratory at home where you can experiment with new tec
 homelab/
 ├── docs/
 │   ├── setup/
+│   │   ├── README.md
+│   │   └── proxmox-helper-scripts.md
 │   ├── network/
 │   ├── storage/
 │   ├── services/
@@ -62,7 +66,10 @@ homelab/
 │   ├── cicd/
 │   │   ├── README.md
 │   │   ├── cicd-pipeline.md
-│   │   └── multi-repo-cicd.md
+│   │   ├── multi-repo-cicd.md
+│   │   └── scripts/
+│   │       ├── source-repos/
+│   │       └── deployment-repo/
 │   ├── maintenance/
 │   └── troubleshooting/
 └── README.md
@@ -71,6 +78,8 @@ homelab/
 ## Features
 
 - **Virtualization**: Running multiple VMs on Proxmox for service isolation
+  - Easy LXC container deployment using community helper scripts
+  - Simplified management of containerized applications
 - **Containerization**: Docker for efficient application deployment
 - **Private Registry**: Local Docker registry for storing custom images
 - **Automated Deployments**: CI/CD pipeline for streamlined updates
