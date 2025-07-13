@@ -1,72 +1,228 @@
 # Setting Up CI/CD for Your Homelab
 
-This guide covers how to set up a secure CI/CD pipeline for deploying applications to your homelab environment using GitHub Actions (or other CI/CD platforms).
+This guide covers how to set up a comprehensive CI/CD pipeline for deploying applications to your homelab environment using GitHub Actions with both Docker Compose and Docker Swarm deployment options.
 
 ## Overview
 
-A proper CI/CD setup allows you to:
+A comprehensive CI/CD setup allows you to:
+
 - Automatically deploy code changes to your homelab
-- Maintain separation between development and production environments
+- Maintain separation between development, staging, and production environments
+- Choose between simple Docker Compose or advanced Docker Swarm deployment
 - Follow security best practices for automated deployments
-- Manage persistent storage for your applications
+- Scale your setup as your needs grow
+
+## Architecture Options
+
+### Option 1: Single Server (Docker Compose)
+
+- **Best for**: Beginners, small projects, learning
+- **Requirements**: 1 server, Docker installed
+- **Benefits**: Simple setup, easy to understand, quick to deploy
+
+### Option 2: Multi-Server Cluster (Docker Swarm)
+
+- **Best for**: Production workloads, high availability
+- **Requirements**: Multiple servers, Docker Swarm cluster
+- **Benefits**: High availability, rolling updates, load balancing
 
 ## Prerequisites
 
-- A homelab server running Linux
+### For Docker Compose Setup
+
+- 1 homelab server running Linux
+- Docker installed on your server
 - SSH access to your server
-- GitHub repository (or other CI/CD platform)
-- NAS or other persistent storage solution
+- GitHub repositories for your projects
+- Tailscale set up for secure connections
 
-## Step 1: Create a Dedicated CI/CD User
+### For Docker Swarm Setup
 
-SSH into your homelab server and create a dedicated user for CI/CD operations:
+- Multiple servers (recommended: 4+ for manager and worker nodes)
+- Docker Swarm cluster initialized
+- Docker installed on all servers
+- SSH access to all servers
+- GitHub repositories for your projects
+- Tailscale set up on all servers
+
+## Step 1: Choose Your Deployment Strategy
+
+### Docker Compose (Recommended for Beginners)
+
+If you're new to CI/CD or have simple requirements, start with Docker Compose:
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  web:
+    image: localhost:5000/my-app:latest
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+```
+
+### Docker Swarm (For Advanced Users)
+
+For production workloads requiring high availability:
+
+```yaml
+# docker-stack.yml
+version: "3.8"
+
+services:
+  web:
+    image: localhost:5000/my-app:latest
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.environment == production
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.environment == production
+      restart_policy:
+        condition: on-failure
+
+networks:
+  app-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  postgres_data:
+    driver: local
+```
+
+## Step 2: Set Up Your Server Environment
+
+### Create a Dedicated CI/CD User
+
+On your homelab server(s), create a dedicated user for CI/CD operations:
 
 ```bash
-# Create the user
-sudo useradd -m -s /bin/bash cicd-bot
+# Create the cicd user
+sudo adduser cicd
+
+# Add to docker group for Docker commands
+sudo usermod -aG docker cicd
+
+# Add sudo privileges for system operations (optional)
+sudo usermod -aG sudo cicd
 
 # Create .ssh directory with proper permissions
-sudo mkdir -p /home/cicd-bot/.ssh
-sudo chmod 700 /home/cicd-bot/.ssh
+sudo mkdir -p /home/cicd/.ssh
+sudo chmod 700 /home/cicd/.ssh
 
 # Create authorized_keys file
-sudo touch /home/cicd-bot/.ssh/authorized_keys
-sudo chmod 600 /home/cicd-bot/.ssh/authorized_keys
-sudo chown -R cicd-bot:cicd-bot /home/cicd-bot/.ssh
+sudo touch /home/cicd/.ssh/authorized_keys
+sudo chmod 600 /home/cicd/.ssh/authorized_keys
+sudo chown -R cicd:cicd /home/cicd/.ssh
+
+# Test switching to cicd user
+sudo su - cicd
+
+# Verify Docker access
+docker --version
+docker ps
 ```
 
-## Step 2: Set Up Docker Permissions
+### Set Up Directory Structure
 
-The CI/CD user needs permission to run Docker commands:
+Create directories for deployment files:
 
 ```bash
-# Add cicd-bot to the docker group
-sudo usermod -aG docker cicd-bot
+# Create directory structure
+sudo mkdir -p /opt/homelab/{scripts,deployments}
+
+# Set ownership to cicd user
+sudo chown -R cicd:cicd /opt/homelab
+
+# Set proper permissions
+sudo chmod -R 755 /opt/homelab
+
+# Verify structure
+ls -la /opt/homelab/
 ```
 
-## Step 3: Generate an SSH Key Pair for CI/CD
+## Step 3: Generate SSH Key Pair for CI/CD
 
 On your local machine (not the server):
 
 ```bash
 # Generate a key pair specifically for CI/CD
-ssh-keygen -t ed25519 -C "cicd-bot@github-actions" -f cicd-bot_github_actions
+ssh-keygen -t ed25519 -C "cicd@homelab" -f ~/.ssh/homelab_cicd
 
 # This creates:
-# - cicd-bot_github_actions (private key)
-# - cicd-bot_github_actions.pub (public key)
+# - homelab_cicd (private key)
+# - homelab_cicd.pub (public key)
 ```
 
-## Step 4: Add the Public Key to the Server
+## Step 4: Add the Public Key to Your Server
 
-Copy the contents of the public key and add it to the authorized_keys file on your server:
+Copy the contents of the public key and add it to the authorized_keys file:
 
 ```bash
 # On your local machine, display the public key
-cat cicd-bot_github_actions.pub
+cat ~/.ssh/homelab_cicd.pub
 
 # Copy the output, then on your server:
-sudo bash -c 'echo "ssh-ed25519 AAAA...your key here... cicd-bot@github-actions" >> /home/cicd-bot/.ssh/authorized_keys'
+sudo bash -c 'echo "ssh-ed25519 AAAA...your key here... cicd@homelab" >> /home/cicd/.ssh/authorized_keys'
 ```
 
 ## Step 5: Get the SSH Known Hosts Entry
@@ -74,269 +230,342 @@ sudo bash -c 'echo "ssh-ed25519 AAAA...your key here... cicd-bot@github-actions"
 To get the known hosts entry for your CI/CD platform secret:
 
 ```bash
-# Replace tailscale-ip with your server's Tailscale IP address
-ssh-keyscan tailscale-ip
+# Replace with your server's Tailscale IP address
+ssh-keyscan YOUR_SERVER_TAILSCALE_IP
 ```
-
-Note: You should use the Tailscale IP address of your server for secure connections through the Tailscale network.
 
 ## Step 6: Set Up CI/CD Secrets
 
-Add these secrets to your GitHub repository (or equivalent in your CI/CD platform):
+Add these secrets to your GitHub repository:
 
 - `HOMELAB_HOST`: Your server's Tailscale IP address
-- `HOMELAB_USER`: Set to `cicd-bot`
-- `HOMELAB_SSH_KEY`: The entire contents of the private key file (cicd-bot_github_actions)
+- `HOMELAB_USER`: Set to `cicd`
+- `HOMELAB_SSH_KEY`: The entire contents of the private key file
 - `HOMELAB_SSH_KNOWN_HOSTS`: The output from the ssh-keyscan command
+- `TAILSCALE_AUTHKEY`: Tailscale authentication key for GitHub Actions
+- `REGISTRY_URL`: Your local Docker registry URL (e.g., `localhost:5000`)
 
 ## Step 7: Test the Connection
 
-Test the connection from your local machine:
+Test the SSH connection from your local machine:
 
 ```bash
-ssh -i cicd-bot_github_actions cicd-bot@your-homelab-host
+ssh -i ~/.ssh/homelab_cicd cicd@YOUR_SERVER_TAILSCALE_IP
+
+# Once connected, verify Docker access
+docker --version
+docker ps
 ```
 
-## Step 8: Set Up Deployment Directories
+## Step 8: Set Up Local Docker Registry
 
-You have two options for setting up the deployment directories:
-
-### Option 1: Manual Setup on the Server
+### For Docker Compose
 
 ```bash
-# Create a deployment directory
-sudo mkdir -p /opt/deployments
+# Create registry directory
+mkdir -p ~/docker-registry
 
-# Give cicd-bot access to the directory
-sudo chown -R cicd-bot:cicd-bot /opt/deployments
+# Run Docker registry
+docker run -d \
+  --name registry \
+  --restart=always \
+  -p 5000:5000 \
+  -v ~/docker-registry:/var/lib/registry \
+  registry:2
 ```
 
-### Option 2: Group-Based Access (For Multiple Users)
-
-If multiple users need access:
+### For Docker Swarm
 
 ```bash
-# Create a group
-sudo groupadd deploy-group
-
-# Add cicd-bot to the group
-sudo usermod -aG deploy-group cicd-bot
-
-# Set group ownership and permissions
-sudo mkdir -p /opt/deployments
-sudo chown -R root:deploy-group /opt/deployments
-sudo chmod -R 770 /opt/deployments
+# Deploy registry as a service
+docker service create \
+  --name registry \
+  --publish 5000:5000 \
+  --constraint 'node.role == manager' \
+  --mount type=bind,src=/opt/docker-registry,dst=/var/lib/registry \
+  registry:2
 ```
 
-### Option 3: Automated Setup via CI/CD Pipeline
+## Step 9: Create Deployment Scripts
 
-A more automated approach is to have your CI/CD pipeline create the necessary directories. This ensures the directories exist and have the correct permissions before deployment:
+### For Docker Compose
 
-```yaml
-- name: Create Directory Structure
-  run: |
-    ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} << 'ENDSSH'
-      # Create deployment directory structure
-      sudo mkdir -p /opt/deployments/{prod,staging}/{app,backups}
-      
-      # Create docker volumes directory structure
-      sudo mkdir -p /mnt/nas-share/docker/volumes/{service1,service2}/{prod,staging}
-      
-      # Set ownership
-      sudo chown -R ${{ secrets.HOMELAB_USER }}:${{ secrets.HOMELAB_USER }} /opt/deployments
-      sudo chown -R ${{ secrets.HOMELAB_USER }}:${{ secrets.HOMELAB_USER }} /mnt/nas-share/docker/volumes/{service1,service2}
-      
-      # Set permissions
-      sudo chmod -R 755 /opt/deployments
-      sudo chmod -R 755 /mnt/nas-share/docker/volumes/{service1,service2}
-      
-      echo "✅ Directory structure created successfully"
-    ENDSSH
-```
-
-This approach has several advantages:
-- Ensures directories exist before deployment
-- Creates a consistent directory structure
-- Sets appropriate permissions automatically
-- Can be version-controlled with your application code
-- Works well for multi-environment setups (prod, staging, dev)
-
-## Step 9: Set Up Persistent Storage
-
-Create directories on your NAS or other storage for different environments:
+Create `/opt/homelab/scripts/deploy-compose.sh`:
 
 ```bash
-# Create directories for different services and environments
-mkdir -p /mnt/nas-share/docker/volumes/{service1,service2,service3}/{prod,staging}
+#!/bin/bash
+
+set -e
+
+ENVIRONMENT=${1:-prod}
+PROJECT_DIR="/opt/homelab/deployments"
+COMPOSE_FILE="docker-compose.${ENVIRONMENT}.yml"
+
+cd $PROJECT_DIR
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "Compose file not found: $COMPOSE_FILE"
+    exit 1
+fi
+
+echo "Deploying to $ENVIRONMENT environment using Docker Compose..."
+
+# Pull latest images
+docker-compose -f $COMPOSE_FILE pull
+
+# Deploy
+docker-compose -f $COMPOSE_FILE up -d
+
+# Clean up old images
+docker image prune -f
+
+echo "Deployment completed successfully!"
+
+# Check service status
+docker-compose -f $COMPOSE_FILE ps
 ```
 
-This creates a structure like:
-- `/mnt/nas-share/docker/volumes/service1/prod`
-- `/mnt/nas-share/docker/volumes/service1/staging`
-- `/mnt/nas-share/docker/volumes/service2/prod`
-- etc.
+### For Docker Swarm
 
-## Step 10: Restrict the CI/CD User (Recommended)
-
-For added security, restrict what the cicd-bot user can do:
+Create `/opt/homelab/scripts/deploy-swarm.sh`:
 
 ```bash
-# Create a sudoers file for cicd-bot with limited permissions
-sudo bash -c 'cat > /etc/sudoers.d/cicd-bot << EOF
-# Allow cicd-bot to use Docker without password
-cicd-bot ALL=(ALL) NOPASSWD: /usr/bin/docker
-EOF'
+#!/bin/bash
 
-sudo chmod 440 /etc/sudoers.d/cicd-bot
+set -e
+
+ENVIRONMENT=${1:-prod}
+SERVICE=${2:-web}
+STACK_NAME="homelab-${ENVIRONMENT}"
+STACK_FILE="/opt/homelab/deployments/docker-stack.${ENVIRONMENT}.yml"
+
+if [ ! -f "$STACK_FILE" ]; then
+    echo "Stack file not found: $STACK_FILE"
+    exit 1
+fi
+
+echo "Deploying $SERVICE to $ENVIRONMENT environment using Docker Swarm..."
+echo "Stack: $STACK_NAME"
+echo "File: $STACK_FILE"
+
+# Deploy the stack
+docker stack deploy --with-registry-auth -c "$STACK_FILE" "$STACK_NAME"
+
+echo "Deployment completed successfully!"
+
+# Wait for service to be ready
+echo "Waiting for service to be ready..."
+sleep 15
+
+# Check service status
+docker service ls --filter "name=${STACK_NAME}"
 ```
 
-## Step 11: Create a GitHub Actions Workflow
+Make the scripts executable:
 
-Create a `.github/workflows/deploy.yml` file in your repository:
+```bash
+chmod +x /opt/homelab/scripts/deploy-compose.sh
+chmod +x /opt/homelab/scripts/deploy-swarm.sh
+```
+
+## Step 10: Create GitHub Actions Workflow
+
+Create `.github/workflows/deploy.yml`:
 
 ```yaml
 name: Deploy to Homelab
 
 on:
   push:
-    branches: [ main ]  # Or your production branch
-  workflow_dispatch:    # Allow manual triggers
+    branches: [main, staging, dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "prod"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      deployment_type:
+        description: "Deployment type"
+        required: true
+        default: "compose"
+        type: choice
+        options:
+          - compose
+          - swarm
+
+env:
+  REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
+  PROJECT_NAME: my-app
+  ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod' || github.ref_name == 'staging' && 'staging' || 'dev') }}
+  DEPLOYMENT_TYPE: ${{ github.event.inputs.deployment_type || 'compose' }}
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Tailscale
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           tags: tag:ci
-          version: latest
-      
-      - name: Configure SSH
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_KEY }}
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-      
-      - name: Create Directory Structure
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} << 'ENDSSH'
-            # Create deployment directory structure
-            sudo mkdir -p /opt/deployments/{prod,staging}/{app,backups}
-            
-            # Create docker volumes directory structure if using NAS storage
-            sudo mkdir -p /mnt/nas-share/docker/volumes/{service1,service2}/{prod,staging}
-            
-            # Set ownership
-            sudo chown -R ${{ secrets.HOMELAB_USER }}:${{ secrets.HOMELAB_USER }} /opt/deployments
-            sudo chown -R ${{ secrets.HOMELAB_USER }}:${{ secrets.HOMELAB_USER }} /mnt/nas-share/docker/volumes/{service1,service2}
-            
-            # Set permissions
-            sudo chmod -R 755 /opt/deployments
-            sudo chmod -R 755 /mnt/nas-share/docker/volumes/{service1,service2}
-            
-            echo "✅ Directory structure created successfully"
-          ENDSSH
-      
-      - name: Sync files to server
-        run: |
-          rsync -avz --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude '.gitignore' \
-            ./ ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }}:/opt/deployments/
-      
+          docker build -t ${{ env.REGISTRY_URL }}/${{ env.PROJECT_NAME }}:${{ env.ENVIRONMENT }} .
+          docker push ${{ env.REGISTRY_URL }}/${{ env.PROJECT_NAME }}:${{ env.ENVIRONMENT }}
+
       - name: Deploy to homelab
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOMELAB_HOST }}
+          username: ${{ secrets.HOMELAB_USER }}
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          script: |
+            cd /opt/homelab
+
+            # Sync deployment files
+            curl -o deployments/docker-compose.${{ env.ENVIRONMENT }}.yml \
+              https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.${{ env.ENVIRONMENT }}.yml
+
+            if [ "${{ env.DEPLOYMENT_TYPE }}" == "swarm" ]; then
+              curl -o deployments/docker-stack.${{ env.ENVIRONMENT }}.yml \
+                https://raw.githubusercontent.com/${{ github.repository }}/main/docker-stack.${{ env.ENVIRONMENT }}.yml
+              ./scripts/deploy-swarm.sh ${{ env.ENVIRONMENT }}
+            else
+              ./scripts/deploy-compose.sh ${{ env.ENVIRONMENT }}
+            fi
+
+            echo "✅ Deployment to ${{ env.ENVIRONMENT }} completed successfully"
+
+      - name: Cleanup Tailscale
+        if: always()
         run: |
-          ssh ${{ secrets.HOMELAB_USER }}@${{ secrets.HOMELAB_HOST }} << 'EOF'
-            cd /opt/deployments
-            
-            # Deploy using Docker Compose
-            docker compose -f docker-compose.prod.yml up -d --build
-          EOF
+          sudo tailscale logout
 ```
 
-This workflow:
-1. Checks out your code
-2. Sets up Tailscale using a GitHub Action to create a secure connection
-3. Configures SSH with your private key and known hosts
-4. Creates the necessary directory structure on the server
-5. Syncs your files to the server using rsync (excluding unnecessary files)
-6. Connects to your server via SSH through the Tailscale network
-7. Executes deployment commands on your server
+## Deployment Commands Reference
 
-### Customizing the Rsync Command
+### Docker Compose Commands
 
-The rsync command above:
-- Uses `-avz` for archive mode, verbosity, and compression
-- Uses `--delete` to remove files on the server that are no longer in the repository
-- Excludes common directories and files that shouldn't be deployed:
-  - `.git/`: Git repository data
-  - `.github/`: GitHub-specific files like workflows
-  - `node_modules/`: Dependencies that should be installed on the server
-  - `.gitignore`: Git configuration file
+```bash
+# Deploy to development
+./scripts/deploy-compose.sh dev
 
-You should customize the excluded paths based on your project structure and requirements.
+# Deploy to production
+./scripts/deploy-compose.sh prod
 
-### Required Secrets
+# Check status
+docker-compose ps
 
-For this workflow, you'll need to set up these GitHub secrets:
+# View logs
+docker-compose logs -f
 
-- `TAILSCALE_AUTHKEY`: An auth key generated from your Tailscale admin console
-- `SSH_KEY`: Your private SSH key (same as HOMELAB_SSH_KEY mentioned earlier)
-- `SSH_KNOWN_HOSTS`: The output from the ssh-keyscan command
-- `HOMELAB_USER`: Your CI/CD user (cicd-bot)
-- `HOMELAB_HOST`: Your server's Tailscale IP address
+# Scale service
+docker-compose up -d --scale web=3
+```
 
-### Tailscale Auth Key
+### Docker Swarm Commands
 
-To generate a Tailscale auth key:
-1. Go to the [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
-2. Click "Generate auth key"
-3. Set appropriate key expiry and permissions
-4. Use the "tag:ci" option to identify connections from your CI/CD pipeline
+```bash
+# Deploy to development
+./scripts/deploy-swarm.sh dev
+
+# Deploy to production
+./scripts/deploy-swarm.sh prod
+
+# List stacks
+docker stack ls
+
+# List services
+docker service ls
+
+# View service logs
+docker service logs homelab-prod_web
+
+# Scale service
+docker service scale homelab-prod_web=3
+```
+
+## Benefits of Each Approach
+
+### Docker Compose Benefits
+
+- **Simple Setup**: Easy to understand and implement
+- **Quick Deployment**: Fast setup for development environments
+- **Resource Efficient**: Works well on a single server
+- **Easy Debugging**: Simple to troubleshoot and modify
+
+### Docker Swarm Benefits
+
+- **High Availability**: Automatic failover and recovery
+- **Zero-Downtime Deployments**: Rolling updates with rollback
+- **Load Balancing**: Built-in load balancing across replicas
+- **Scalability**: Easy horizontal scaling across nodes
+- **Production Ready**: Suitable for production workloads
 
 ## Security Considerations
 
-- The CI/CD user should have the minimum permissions needed
-- Use separate environments for staging and production
-- Consider using Docker secrets for sensitive information
-- Regularly rotate SSH keys
-- Monitor CI/CD logs for unauthorized access attempts
+1. Use Tailscale for secure connections between GitHub Actions and your homelab
+2. Store sensitive information in GitHub Secrets
+3. Use a dedicated CI/CD user with limited permissions
+4. Regularly rotate SSH keys and access tokens
+5. Use environment-specific configurations
+6. Implement proper firewall rules
+7. Keep your systems updated
 
 ## Troubleshooting
 
-### SSH Connection Issues
+### Common Issues
 
-If you can't connect via SSH:
-```bash
-# Check SSH service status
-sudo systemctl status sshd
+1. **SSH Connection Issues**:
 
-# Check SSH logs
-sudo journalctl -u sshd
+   ```bash
+   # Test SSH connection
+   ssh -i ~/.ssh/homelab_cicd cicd@YOUR_SERVER_IP
 
-# Verify permissions on .ssh directory
-ls -la /home/cicd-bot/.ssh
-```
+   # Check SSH service
+   sudo systemctl status ssh
+   ```
 
-### Docker Permission Issues
+2. **Docker Permission Issues**:
 
-If the CI/CD user can't run Docker commands:
-```bash
-# Verify the user is in the docker group
-groups cicd-bot
+   ```bash
+   # Verify user is in docker group
+   groups cicd
 
-# Restart the Docker service
-sudo systemctl restart docker
-```
+   # Add user to docker group if needed
+   sudo usermod -aG docker cicd
+   ```
+
+3. **Registry Connection Issues**:
+
+   ```bash
+   # Check registry is running
+   docker ps | grep registry
+
+   # Test registry connectivity
+   curl http://localhost:5000/v2/_catalog
+   ```
 
 ## Next Steps
 
-- [Set up monitoring for your CI/CD pipeline](monitoring.md)
-- [Implement automated testing](testing.md)
-- [Configure backup solutions](../backup/README.md) 
+Once you have your CI/CD pipeline working:
+
+1. **Add monitoring**: Implement logging and monitoring for your applications
+2. **Add testing**: Include automated testing in your CI/CD pipeline
+3. **Implement secrets management**: Use proper secrets management for sensitive data
+4. **Add more environments**: Create additional environments as needed
+5. **Consider scaling**: Move from Docker Compose to Docker Swarm as your needs grow
+
+This setup provides a solid foundation for homelab CI/CD that can grow with your needs and requirements.
